@@ -2,6 +2,8 @@ const experss = require('express')
 const mongoose = require('mongoose')
 const bodyParser = require('body-parser')
 require('dotenv').config()
+const cors = require('cors');
+
 
 const authRouter = require('./routers/auth')
 const app = experss()
@@ -25,8 +27,14 @@ const testSingleSeatModel = mongoose.model('TestSingleSeat', testSingleSeat)
 const testPayment = require('./models/testPayment')
 const testPaymentModel = mongoose.model('TestPayment', testPayment)
 
+app.use(cors({
+    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    methods: 'GET,POST,PUT,DELETE', // Add other HTTP methods if needed
+    credentials: true,    // Include this if you need to send cookies or authorization headers
+  }));
 
-const port = 3000
+
+const port = 5000
 const MONGO_URL = process.env.MONGO_URL
 
 app.use(bodyParser.json())
@@ -76,6 +84,7 @@ app.post('/theatre/add', async (req, res) => {
     }
 })
 
+//fetch all thearte
 app.get('/theatre/fetch', async (req, res) => {
     
     try {
@@ -114,6 +123,7 @@ app.put("/theatre/update", async (req, res) => {
     res.send(updatedTheatre)
 })
 
+// add a screen to the theatre
 app.post('/screens/add', async (req, res) => {
     const theatreID = req.body.theatreID
     const seats = req.body.seats
@@ -141,6 +151,7 @@ app.post('/screens/add', async (req, res) => {
     }
 })
 
+// fetch all screens of the movie
 app.get('/screens/fetch', async (req, res) => {
     try {
         const theatreID = req.body.theatreID
@@ -156,6 +167,7 @@ app.get('/screens/fetch', async (req, res) => {
     }
 })
 
+// detele a screen
 app.delete("/screens/remove", async (req, res) => {
     const screenID = req.body.screenID
     
@@ -169,6 +181,7 @@ app.delete("/screens/remove", async (req, res) => {
     res.send(updatedTheatre)
 })
 
+// update a screen
 app.put("/screen/update", async (req, res) => {
     const count = req.body.count
     const screenID = req.body.screenID
@@ -181,6 +194,8 @@ app.put("/screen/update", async (req, res) => {
     res.send(updatedTheatre)
 })
 
+
+// Add a show(i.e showing a movie in a screen)
 app.post('/shows/add', async (req, res) => {
     const theatreID = req.body.theatreID
     const screenID = req.body.screenID
@@ -315,7 +330,7 @@ app.post("/movie/add", async (req, res) => {
 // User level
 
 app.get('/shows/live', async (req, res) => {
-    // Get all, live shows, get the movies and return the movie.
+    // Get all, live shows, get the list of current movies and return the list.
 
     const liveShows = await testShowModel.aggregate([
         {
@@ -340,7 +355,7 @@ app.get('/shows/live', async (req, res) => {
             // movieId: movieIDs[0]
         })
 
-        res.send(movies)
+        res.send({data:movies, success:true})
 
     } else {
         res.send("No Live shows")
@@ -349,6 +364,8 @@ app.get('/shows/live', async (req, res) => {
     // res.send(liveShows)
 })
 
+
+// this is for the description page of a sngle movie, list of all screens showing that movie
 app.get('/shows/live/movie', async (req, res) => {
     const movieID = req.body.movieID
 
@@ -359,6 +376,8 @@ app.get('/shows/live/movie', async (req, res) => {
     res.send(liveShowsForMovie)
 })
 
+
+// after selecting a movie and screen, this is to get the available seats
 app.get('/shows/live/fetchSeats', async (req, res) => {
     const showID = req.body.showID
 
@@ -368,6 +387,8 @@ app.get('/shows/live/fetchSeats', async (req, res) => {
 
 })
 
+
+// this is once user selects the seat and want to go for booking
 app.get('/shows/live/bookSeats', async (req, res) => {
     const showID = req.body.showID
     const seatIDs = req.body.seatIDs
@@ -404,13 +425,14 @@ app.get('/shows/live/bookSeats', async (req, res) => {
 
         console.log(seatInBuffer)
 
-        // seats are now in buffer
-        // make the purchase
+        // seats are now in buffer state, so other person can't use it now
+        // user does the purchase
+        // here a sample payment gateway callback will be present
+        //if purchase is successful(assuminh the payment was successfull)
+        const transactionID = "ABC_123" // wshould be random
+        const userID = "PBCS"    // should be with the logged in user, can be received from payload
 
-        //if purchase is successful
-        const transactionID = "ABC_123"
-        const userID = "PBCS"
-
+        // set seat status to false
         const seatInSold = await testSingleSeatModel.updateMany(
             { _id: {$in : ids}},
             { $set: { inBuffer: false, sold: true, available: false}}
@@ -418,9 +440,11 @@ app.get('/shows/live/bookSeats', async (req, res) => {
 
         console.log(seatInSold)
 
+        // craete transaction record and create details
         const transaction = new testPaymentModel({transactionID, userID, showID, seats})
         transaction.save()
             .then((transactionStatus) => {
+                // Genrate QR and send it via Twillio
                 res.send(transactionStatus)
             }).catch((e) => res.send(e))
 
